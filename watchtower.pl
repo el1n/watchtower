@@ -149,7 +149,6 @@ while(sub{
 					}
 					addstr($y,$x + 0,sprintf("%-15s",$d->{$order[$i]}->{v4a}));
 					addstr($y,$x + 15,sprintf("%17s",$d->{$order[$i]}->{hwa} // join(":",("--") x 6)));
-					addstr($y,$x + 15,sprintf("%17s",join(":",("--") x 6)));
 					for(my $j = 0;$j < 18;++$j){
 						chgat($y,$x + 15 + $j,1,undef,$d->{$order[$i]}->{h}->[$j],undef);
 					}
