@@ -2,8 +2,8 @@
 use 5.10.0;
 use vars qw();
 use constant ME =>"Watchtower";
-use constant VERSION =>"1.0.1";
-use constant LOG_LINE =>2;
+use constant VERSION =>"1.0.2";
+use constant LOG_LINE =>20;
 use constant MON_LINE =>1;
 use constant PING_TIMEOUT =>0.5;
 use constant MON_TIMEOUT =>43200;
@@ -11,10 +11,6 @@ use constant ACT_SCH_WAIT =>10;
 use constant PSV_SCH_WAIT =>180;
 use constant PSV_SCH_DELAY =>0.333;
 use constant ACT_MON_WAIT =>5;
-use constant PSV_S_WAIT =>10;
-use constant PASSIVE_SEARCH_WAIT =>180;
-use constant ACTIVE_MONITOR_WAIT =>5;
-use constant PASSIVE_MONITOR_WAIT =>0.33;
 use List::MoreUtils qw(:all);
 use Time::HiRes qw(sleep);
 use threads;
@@ -42,23 +38,27 @@ if(open(FH,"binoculars.conf")){
 	while(<FH>){
 		chomp();
 
-		threads->new(sub{
-			my $g = shift();
-			(my $ech = Net::Ping->new($> ? "udp" : "icmp"))->hires();
-			do{
-				my $i = Net::CIDR::Set->new($g)->iterate_addresses();
-#				while($i->()){
-				while($_ = $i->()){
-					if($ech->ping($_,PING_TIMEOUT)){
-						$que->enqueue([1,$_,undef]);
+		if(/^(\d+(?:\.\d+){3})(?:\/(\d+))?$/){
+			threads->new(sub{
+				my $addr = shift();
+				my $mask = shift();
+				(my $ech = Net::Ping->new($> ? "udp" : "icmp"))->hires();
+				do{
+					my $n = 2 ** (32 - $mask) - 1;
+					my $i = unpack("N",pack("C4",split(/\./,$addr))) & ~$n;
+					for($i..$i + $n){
+						if($ech->ping(join(".",unpack("C4",pack("N",$_))),PING_TIMEOUT)){
+							$que->enqueue([1,join(".",unpack("C4",pack("N",$_))),undef]);
+						}
+						sleep(PSV_SCH_DELAY);
 					}
-					sleep(PSV_SCH_DELAY);
-				}
-			}while(sleep(PSV_SCH_WAIT));
-		
-			$ech->close();
-			return();
-		},$_)->detach();
+				}while(sleep(PSV_SCH_WAIT));
+			
+				$ech->close();
+				return();
+			},$1,$2 // 32)->detach();
+		}else{
+		}
 	}
 	close(FH);
 }
@@ -82,8 +82,6 @@ while(sub{
 	for(shift()){
 		when(1){
 			if(!defined($d->{$_[0]})){
-				$d->{$_[0]} = 1;
-
 				threads->new(sub{
 					my $d = {v4a =>shift(),hwa =>shift(),u =>time(),h =>[(0) x 18]};
 					(my $ech = Net::Ping->new($> ? "udp" : "icmp"))->hires();
@@ -106,6 +104,8 @@ while(sub{
 					$ech->close();
 					return();
 				},@_)->detach();
+			}else{
+				$d->{$_[0]}->{hwa} = $_[1];
 			}
 		}
 		when(2){
@@ -119,7 +119,10 @@ while(sub{
 			my $g = shift();
 			my $s;
 			my $e;
-			$d->{$g->{v4a}} = $g;
+
+			for(grep{defined($g->{$_})}keys(%{$g})){
+				$d->{$g->{v4a}}->{$_} = $g->{$_};
+			}
 
 			if(!grep{$_ eq $g->{v4a}}@order){
 				$s = firstidx{$_ eq $g->{v4a}}@order = sort{pack("C4",split(/\./,$a)) cmp pack("C4",split(/\./,$b))}(@order,$g->{v4a});
