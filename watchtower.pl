@@ -17,8 +17,6 @@ use threads;
 use threads::shared;
 use Thread::Queue;
 use Net::Ping;
-#use Net::CIDR;
-use Net::CIDR::Set;
 use Curses;
 #use Win32::Console;
 
